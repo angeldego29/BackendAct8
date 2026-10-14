@@ -54,3 +54,11 @@ export const updateTaskTitle = (id, newTitle) => {
     task.title = newTitle.trim();
     return task;
 };
+export const updateTaskStatus = (id, completed) => {
+    const task = tasks.find((item) => item.id === id);
+    if (!task) {
+        throw new AppError(`No existe una tarea con el id ${id}.`, 404, "TASK_NOT_FOUND");
+    }
+    task.status = completed ? "completed" : "pending";
+    return task;
+};

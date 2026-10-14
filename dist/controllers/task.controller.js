@@ -1,4 +1,4 @@
-import { completeTask, createTask, deleteTask, findTaskById, listTasks, updateTaskTitle, } from "../services/task.service.js";
+import { completeTask, createTask, deleteTask, findTaskById, listTasks, updateTaskStatus, updateTaskTitle, } from "../services/task.service.js";
 export const getTasks = (_req, res) => {
     const tasks = listTasks();
     console.log("\n📋 Tareas registradas:");
@@ -33,4 +33,8 @@ export const removeTask = (_req, res) => {
     deleteTask(res.locals.taskId);
     console.log(`\n🗑️ Tarea ${res.locals.taskId} eliminada`);
     res.status(204).send();
+};
+export const patchTaskStatus = (_req, res) => {
+    const task = updateTaskStatus(res.locals.taskId, res.locals.completed);
+    res.status(200).json({ data: task });
 };

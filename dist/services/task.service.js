@@ -1,64 +1,76 @@
-import { tasks } from '../data/tasks.js';
+import mongoose from 'mongoose';
 import { AppError } from '../errors/app-error.js';
-export const listTasks = () => tasks;
-export const findTaskById = (id) => {
-    const task = tasks.find((item) => item.id === id);
-    if (!task) {
-        throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
+import { TaskModel } from '../models/task.js';
+const toTask = (document) => ({
+    id: document._id.toString(),
+    title: document.title,
+    status: document.status,
+    createdAt: document.createdAt,
+    updatedAt: document.updatedAt
+});
+const mapPersistenceError = (error) => {
+    if (error instanceof AppError)
+        return error;
+    if (error instanceof mongoose.Error.ValidationError) {
+        const details = Object.values(error.errors).map((item) => ({
+            field: item.path,
+            message: item.message
+        }));
+        return new AppError('La tarea no cumple las reglas del modelo.', 422, 'PERSISTENCE_VALIDATION_ERROR', details);
     }
-    return task;
+    return new AppError('No fue posible acceder al almacenamiento de tareas.', 503, 'DATABASE_UNAVAILABLE');
 };
-export const createTask = (title) => {
-    if (typeof title !== 'string' || !title.trim()) {
-        throw new AppError('La solicitud contiene datos inválidos.', 422, 'VALIDATION_ERROR', [{ field: 'title', message: 'Debe ser texto no vacío.' }]);
+export const listTasks = async () => {
+    try {
+        const documents = await TaskModel.find().sort({ createdAt: 1 });
+        return documents.map(toTask);
     }
-    if (title.trim().length > 120) {
-        throw new AppError('La solicitud contiene datos inválidos.', 422, 'VALIDATION_ERROR', [{ field: 'title', message: 'No debe superar 120 caracteres.' }]);
+    catch (error) {
+        throw mapPersistenceError(error);
     }
-    const task = {
-        id: Math.max(0, ...tasks.map((item) => item.id)) + 1,
-        title: title.trim(),
-        status: 'pending',
-        createdAt: new Date()
-    };
-    tasks.push(task);
-    return task;
 };
-export const completeTask = (id) => {
-    const task = findTaskById(id);
-    task.status = 'completed';
-    return task;
+export const findTaskById = async (id) => {
+    try {
+        const document = await TaskModel.findById(id);
+        if (!document) {
+            throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
+        }
+        return toTask(document);
+    }
+    catch (error) {
+        throw mapPersistenceError(error);
+    }
 };
-export const deleteTask = (id) => {
-    const index = tasks.findIndex((item) => item.id === id);
-    if (index === -1) {
-        throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
+export const createTask = async (title) => {
+    try {
+        const document = await TaskModel.create({ title, status: 'pending' });
+        return toTask(document);
     }
-    tasks.splice(index, 1);
+    catch (error) {
+        throw mapPersistenceError(error);
+    }
 };
-// 🔴 Nueva lógica: actualizar título de tarea
-export const updateTaskTitle = (id, newTitle) => {
-    if (typeof newTitle !== 'string' || !newTitle.trim()) {
-        throw new AppError('La solicitud contiene datos inválidos.', 422, 'VALIDATION_ERROR', [{ field: 'title', message: 'Debe ser texto no vacío.' }]);
+export const updateTask = async (id, changes) => {
+    try {
+        const document = await TaskModel.findByIdAndUpdate(id, { $set: changes }, { new: true, runValidators: true });
+        if (!document) {
+            throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
+        }
+        return toTask(document);
     }
-    if (newTitle.trim().length > 120) {
-        throw new AppError('La solicitud contiene datos inválidos.', 422, 'VALIDATION_ERROR', [{ field: 'title', message: 'No debe superar 120 caracteres.' }]);
+    catch (error) {
+        throw mapPersistenceError(error);
     }
-    if (!Number.isInteger(id) || id <= 0) {
-        throw new AppError('El id debe ser un entero positivo.', 400, 'VALIDATION_ERROR', [{ field: 'id', message: 'Debe ser un número entero positivo.' }]);
-    }
-    const task = tasks.find((item) => item.id === id);
-    if (!task) {
-        throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
-    }
-    task.title = newTitle.trim();
-    return task;
 };
-export const updateTaskStatus = (id, completed) => {
-    const task = tasks.find((item) => item.id === id);
-    if (!task) {
-        throw new AppError(`No existe una tarea con el id ${id}.`, 404, "TASK_NOT_FOUND");
+export const completeTask = async (id) => updateTask(id, { status: 'completed' });
+export const deleteTask = async (id) => {
+    try {
+        const document = await TaskModel.findByIdAndDelete(id);
+        if (!document) {
+            throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
+        }
     }
-    task.status = completed ? "completed" : "pending";
-    return task;
+    catch (error) {
+        throw mapPersistenceError(error);
+    }
 };

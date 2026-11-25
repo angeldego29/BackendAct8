@@ -1,6 +1,5 @@
-import mongoose from 'mongoose';
 import { AppError } from '../errors/app-error.js';
-import { TaskModel } from '../models/task.js';
+import { createTaskDocument, deleteTaskDocument, findTaskDocumentById, findTaskDocuments, updateTaskDocument } from '../repositories/task.repository.js';
 const toTask = (document) => ({
     id: document._id.toString(),
     title: document.title,
@@ -8,69 +7,43 @@ const toTask = (document) => ({
     createdAt: document.createdAt,
     updatedAt: document.updatedAt
 });
-const mapPersistenceError = (error) => {
-    if (error instanceof AppError)
-        return error;
-    if (error instanceof mongoose.Error.ValidationError) {
-        const details = Object.values(error.errors).map((item) => ({
-            field: item.path,
-            message: item.message
-        }));
-        return new AppError('La tarea no cumple las reglas del modelo.', 422, 'PERSISTENCE_VALIDATION_ERROR', details);
-    }
-    return new AppError('No fue posible acceder al almacenamiento de tareas.', 503, 'DATABASE_UNAVAILABLE');
-};
-export const listTasks = async () => {
-    try {
-        const documents = await TaskModel.find().sort({ createdAt: 1 });
-        return documents.map(toTask);
-    }
-    catch (error) {
-        throw mapPersistenceError(error);
-    }
+export const listTasks = async (query) => {
+    const { documents, total } = await findTaskDocuments(query);
+    const totalPages = Math.ceil(total / query.limit);
+    return {
+        data: documents.map(toTask),
+        meta: {
+            page: query.page,
+            limit: query.limit,
+            total,
+            totalPages,
+            hasNextPage: query.page < totalPages,
+            hasPreviousPage: query.page > 1 && totalPages > 0
+        }
+    };
 };
 export const findTaskById = async (id) => {
-    try {
-        const document = await TaskModel.findById(id);
-        if (!document) {
-            throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
-        }
-        return toTask(document);
+    const document = await findTaskDocumentById(id);
+    if (!document) {
+        throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
     }
-    catch (error) {
-        throw mapPersistenceError(error);
-    }
+    return toTask(document);
 };
 export const createTask = async (title) => {
-    try {
-        const document = await TaskModel.create({ title, status: 'pending' });
-        return toTask(document);
-    }
-    catch (error) {
-        throw mapPersistenceError(error);
-    }
+    const document = await createTaskDocument(title);
+    return toTask(document);
 };
 export const updateTask = async (id, changes) => {
-    try {
-        const document = await TaskModel.findByIdAndUpdate(id, { $set: changes }, { new: true, runValidators: true });
-        if (!document) {
-            throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
-        }
-        return toTask(document);
+    const document = await updateTaskDocument(id, changes);
+    if (!document) {
+        throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
     }
-    catch (error) {
-        throw mapPersistenceError(error);
-    }
+    return toTask(document);
 };
 export const completeTask = async (id) => updateTask(id, { status: 'completed' });
 export const deleteTask = async (id) => {
-    try {
-        const document = await TaskModel.findByIdAndDelete(id);
-        if (!document) {
-            throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
-        }
-    }
-    catch (error) {
-        throw mapPersistenceError(error);
+    const document = await deleteTaskDocument(id);
+    if (!document) {
+        throw new AppError(`No existe una tarea con el id ${id}.`, 404, 'TASK_NOT_FOUND');
     }
 };

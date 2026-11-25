@@ -6,3 +6,7 @@ export const connectDatabase = async (config) => {
     });
     console.log('Conexión con MongoDB establecida.');
 };
+export const disconnectDatabase = async () => {
+    await mongoose.disconnect();
+    console.log('Conexión con MongoDB cerrada.');
+};

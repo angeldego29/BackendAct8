@@ -1,22 +1,34 @@
-import 'dotenv/config';
 import { app } from './app.js';
-import { connectDatabase } from './config/database.js';
-import { loadEnvironment } from './config/env.js';
-const startServer = async () => {
+import { connectDatabase, disconnectDatabase } from './config/database.js';
+import { env } from './config/env.js';
+let server;
+const start = async () => {
     try {
-        const env = loadEnvironment();
-        await connectDatabase({
-            uri: env.mongodbUri,
-            dbName: env.mongodbDbName
-        });
-        app.listen(env.port, () => {
-            console.log(`API disponible en http://localhost:${env.port}`);
+        await connectDatabase({ uri: env.MONGODB_URI, dbName: env.MONGODB_DB_NAME });
+        server = app.listen(env.PORT, '0.0.0.0', () => {
+            console.log(`API ${env.APP_VERSION} disponible en ${env.PUBLIC_API_URL}`);
         });
     }
     catch {
-        console.error('No fue posible iniciar la API. Revise MONGODB_URI, ' +
-            'el usuario y la lista de acceso de red.');
+        console.error('No fue posible iniciar la API. Revisa la configuración y la conexión.');
         process.exitCode = 1;
     }
 };
-void startServer();
+const shutdown = async (signal) => {
+    console.log(`Se recibió ${signal}. Cerrando la API.`);
+    if (server) {
+        await new Promise((resolve, reject) => {
+            server?.close((error) => error ? reject(error) : resolve());
+        });
+    }
+    await disconnectDatabase();
+};
+for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.once(signal, () => {
+        void shutdown(signal).catch(() => {
+            console.error('No fue posible cerrar la API correctamente.');
+            process.exitCode = 1;
+        });
+    });
+}
+await start();

@@ -1,6 +1,6 @@
 import { completeTask, createTask, deleteTask, findTaskById, listTasks, updateTask } from '../services/task.service.js';
 export const getTasks = async (_req, res) => {
-    res.status(200).json({ data: await listTasks() });
+    res.status(200).json(await listTasks(res.locals.taskQuery));
 };
 export const getTask = async (_req, res) => {
     res.status(200).json({ data: await findTaskById(res.locals.taskId) });
